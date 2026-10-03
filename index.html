@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#07111f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>FitAI - Entrenador Inteligente</title>
+
+<!-- Versiones fijas (las de @latest pueden romper la app sin avisar) -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#fff;min-height:100vh;min-height:100dvh;
+  background:linear-gradient(135deg,#07111f,#0b1729,#101827);
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.08)}
+.logo{font-size:22px;font-weight:bold;letter-spacing:1px}.logo span{color:#36e06f}
+.estado-ia{display:flex;align-items:center;gap:8px;background:rgba(54,224,111,.1);padding:7px 12px;border-radius:20px;font-size:13px;color:#36e06f}
+.punto{width:9px;height:9px;border-radius:50%;background:#36e06f;box-shadow:0 0 10px #36e06f}
+.estado-ia.off{background:rgba(255,255,255,.08);color:#9ca8b8}.estado-ia.off .punto{background:#9ca8b8;box-shadow:none}
+.contenedor{max-width:1100px;margin:auto;padding:22px 16px}
+h1{margin:0;font-size:28px}.sub{color:#9ca8b8;margin:6px 0 20px}
+.grid{display:grid;grid-template-columns:1.4fr .8fr;gap:20px}
+.card{background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:16px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+h2{margin:0 0 12px;font-size:18px}
+#camara{display:flex;justify-content:center;overflow:hidden;border-radius:15px;background:#050b13;min-height:200px;align-items:center;color:#9ca8b8}
+#camara canvas,#camara video{width:100%;max-width:600px;height:auto;border-radius:15px}
+.estado{text-align:center;margin-top:14px;padding:12px;border-radius:12px;background:rgba(54,224,111,.08);border:1px solid rgba(54,224,111,.15)}
+#estado{font-size:24px;font-weight:bold;color:#36e06f;text-transform:capitalize}
+#confianza{margin-top:4px;color:#9ca8b8;font-size:14px}
+#mensaje{text-align:center;margin-top:14px;color:#9ca8b8;font-size:15px;min-height:22px}
+.botones{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+button{flex:1;min-height:52px;padding:12px;border:none;border-radius:12px;font-size:16px;font-weight:bold;cursor:pointer;transition:transform .1s,opacity .2s}
+button:active{transform:scale(.97);opacity:.85}
+.btn-iniciar{background:#36e06f;color:#06110a}.btn-detener{background:#ef5350;color:#fff}
+.btn-sec{background:rgba(255,255,255,.1);color:#fff}
+.estadisticas{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.stat{background:rgba(255,255,255,.045);border-radius:15px;padding:16px;text-align:center}
+.stat-titulo{color:#9ca8b8;font-size:13px;margin-bottom:6px}
+.stat-valor{font-size:40px;font-weight:bold}
+#repeticiones{color:#36e06f}#tiempo{font-size:30px}
+input[type=number]{width:80px;font-size:28px;font-weight:bold;text-align:center;color:#fff;background:transparent;border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:2px}
+.opciones{margin-top:14px;display:flex;flex-direction:column;gap:10px;color:#9ca8b8;font-size:15px}
+.opciones label{display:flex;align-items:center;gap:10px;min-height:32px}
+.opciones input{width:20px;height:20px}
+@media(max-width:850px){.grid{grid-template-columns:1fr}h1{font-size:24px}}
+@media(max-width:380px){.stat-valor{font-size:32px}#tiempo{font-size:24px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Fit<span>AI</span></div>
+  <div class="estado-ia off" id="pill"><div class="punto"></div><span id="pillTxt">EN PAUSA</span></div>
+</header>
+
+<div class="contenedor">
+  <h1>Entrenador de Sentadillas</h1>
+  <p class="sub">Tu entrenamiento asistido por visión artificial</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>📷 Cámara</h2>
+      <div id="camara">La cámara aparecerá aquí</div>
+      <div class="estado">
+        <div id="estado">Esperando...</div>
+        <div id="confianza">Confianza: 0%</div>
+      </div>
+      <div id="mensaje">Apoya el teléfono, aléjate y que se vea todo tu cuerpo. Luego presiona Iniciar.</div>
+      <div class="botones">
+        <button id="botonIniciar" class="btn-iniciar">▶️ Iniciar</button>
+        <button id="botonCamara" class="btn-sec">🔁 Cambiar cámara</button>
+        <button id="botonReiniciar" class="btn-sec">🔄 Reiniciar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📊 Entrenamiento</h2>
+      <div class="estadisticas">
+        <div class="stat"><div class="stat-titulo">Repeticiones</div><div id="repeticiones" class="stat-valor">0</div></div>
+        <div class="stat"><div class="stat-titulo">Serie</div><div id="series" class="stat-valor">1</div></div>
+        <div class="stat"><div class="stat-titulo">Tiempo</div><div id="tiempo" class="stat-valor">00:00</div></div>
+        <div class="stat"><div class="stat-titulo">Meta por serie</div><input id="meta" type="number" min="1" max="100" value="10" inputmode="numeric"></div>
+      </div>
+      <div class="opciones">
+        <label><input type="checkbox" id="voz" checked> Decir el número en voz alta</label>
+        <label><input type="checkbox" id="sonido" checked> Sonido y vibración</label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== CONFIGURACIÓN =====
+const MODEL_URL = "https://teachablemachine.withgoogle.com/models/zzAdMNAF1/";
+const CLASE_ABAJO = "abajo";      // nombres de las clases de tu modelo
+const CLASE_ARRIBA = "arriba";
+const CONFIANZA_MINIMA = 0.80;
+const FRAMES_ESTABLES = 3;        // predicciones seguidas para confirmar una posición
+const INTERVALO_MS = 80;          // ~12 predicciones/seg (cuida batería del teléfono)
+
+// ===== ESTADO =====
+const $ = id => document.getElementById(id);
+let modelo, webcam, audioCtx, wakeLock = null, timer = null;
+let corriendo = false, camara = "user";
+let reps = 0, series = 1, segundos = 0;
+let bajo = false, candidato = "", estables = 0, ultimo = 0;
+
+const msg = t => $("mensaje").innerText = t;
+
+function setPill(on) {
+  $("pill").className = "estado-ia" + (on ? "" : " off");
+  $("pillTxt").innerText = on ? "IA ACTIVA" : "EN PAUSA";
+}
+
+// ===== CÁMARA =====
+async function abrirCamara() {
+  if (webcam) webcam.stop();
+  webcam = new tmImage.Webcam(400, 400, camara === "user"); // espejo solo en frontal
+  await webcam.setup({ facingMode: camara });
+  await webcam.play();
+  $("camara").replaceChildren(webcam.canvas);
+}
+
+async function cambiarCamara() {
+  camara = camara === "user" ? "environment" : "user";
+  if (!corriendo) { msg("Cámara " + (camara === "user" ? "frontal" : "trasera") + " seleccionada."); return; }
+  try { await abrirCamara(); } catch (e) { msg("No pude cambiar de cámara: " + e.message); }
+}
+
+// ===== INICIAR / DETENER =====
+async function iniciar() {
+  if (corriendo) return;
+  if (!navigator.mediaDevices) {
+    msg("La cámara requiere HTTPS. Abre la página desde un enlace https:// (ej. GitHub Pages o Netlify).");
+    return;
+  }
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    msg("Cargando inteligencia artificial...");
+    if (!modelo) modelo = await tmImage.load(MODEL_URL + "model.json", MODEL_URL + "metadata.json");
+    await abrirCamara();
+  } catch (e) {
+    msg(e.name === "NotAllowedError" ? "Permiso de cámara denegado. Actívalo en los ajustes del navegador."
+                                     : "No pude iniciar: " + e.message);
+    return;
+  }
+  corriendo = true;
+  setPill(true);
+  const b = $("botonIniciar");
+  b.innerText = "⏹️ Detener"; b.className = "btn-detener";
+  iniciarCronometro();
+  pedirPantallaActiva();
+  msg("¡Entrenamiento iniciado! 💪");
+  requestAnimationFrame(bucle);
+}
+
+function detener() {
+  corriendo = false;
+  if (webcam) webcam.stop();
+  detenerCronometro();
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  setPill(false);
+  const b = $("botonIniciar");
+  b.innerText = "▶️ Continuar"; b.className = "btn-iniciar";
+  msg("Entrenamiento pausado.");
+}
+
+$("botonIniciar").onclick = () => corriendo ? detener() : iniciar();
+$("botonCamara").onclick = cambiarCamara;
+$("botonReiniciar").onclick = reiniciar;
+
+// ===== BUCLE DE DETECCIÓN =====
+async function bucle(t) {
+  if (!corriendo) return;
+  if (t - ultimo >= INTERVALO_MS) {
+    ultimo = t;
+    webcam.update();
+    try { await predecir(); } catch (e) { console.error(e); }
+  }
+  if (corriendo) requestAnimationFrame(bucle);
+}
+
+async function predecir() {
+  const p = await modelo.predict(webcam.canvas);
+  let mejor = p[0];
+  for (const x of p) if (x.probability > mejor.probability) mejor = x;
+
+  $("confianza").innerText = "Confianza: " + Math.round(mejor.probability * 100) + "%";
+  if (mejor.probability < CONFIANZA_MINIMA) {
+    $("estado").innerText = "Analizando...";
+    estables = 0; candidato = "";
+    return;
+  }
+
+  const clase = mejor.className.toLowerCase();
+  $("estado").innerText = clase;
+
+  // Una posición cuenta solo si se mantiene varias predicciones seguidas
+  if (clase === candidato) estables++; else { candidato = clase; estables = 1; }
+  if (estables !== FRAMES_ESTABLES) return;
+
+  if (clase === CLASE_ABAJO) bajo = true;
+  else if (clase === CLASE_ARRIBA && bajo) { bajo = false; contarRep(); }
+}
+
+// ===== CONTEO Y AVISOS =====
+function contarRep() {
+  reps++;
+  const meta = Math.max(1, parseInt($("meta").value) || 10);
+  $("repeticiones").innerText = reps;
+  avisar(reps >= meta ? "Serie completada" : String(reps), reps >= meta);
+  if (reps >= meta) {
+    msg("🏆 Serie " + series + " completada (" + reps + " reps). ¡Descansa!");
+    series++; reps = 0;
+    $("series").innerText = series;
+    setTimeout(() => $("repeticiones").innerText = 0, 1500);
+  } else {
+    msg("✅ Repetición " + reps + " de " + meta);
+  }
+}
+
+function avisar(texto, fuerte) {
+  if ($("sonido").checked) {
+    if (navigator.vibrate) navigator.vibrate(fuerte ? [120, 60, 120] : 60);
+    try {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.frequency.value = fuerte ? 880 : 600; g.gain.value = 0.15;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(); o.stop(audioCtx.currentTime + (fuerte ? 0.3 : 0.12));
+    } catch (e) {}
+  }
+  if ($("voz").checked && "speechSynthesis" in window) {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(texto);
+    u.lang = "es-ES";
+    speechSynthesis.speak(u);
+  }
+}
+
+// ===== CRONÓMETRO =====
+function iniciarCronometro() {
+  if (timer) return;
+  timer = setInterval(() => {
+    segundos++;
+    const m = String(Math.floor(segundos / 60)).padStart(2, "0");
+    const s = String(segundos % 60).padStart(2, "0");
+    $("tiempo").innerText = m + ":" + s;
+  }, 1000);
+}
+function detenerCronometro() { clearInterval(timer); timer = null; }
+
+// ===== PANTALLA ENCENDIDA =====
+async function pedirPantallaActiva() {
+  try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
+}
+document.addEventListener("visibilitychange", () => {
+  if (corriendo && document.visibilityState === "visible") pedirPantallaActiva();
+});
+
+// ===== REINICIAR =====
+function reiniciar() {
+  reps = 0; series = 1; segundos = 0;
+  bajo = false; candidato = ""; estables = 0;
+  $("repeticiones").innerText = "0";
+  $("series").innerText = "1";
+  $("tiempo").innerText = "00:00";
+  $("estado").innerText = "Esperando...";
+  $("confianza").innerText = "Confianza: 0%";
+  msg("Contador reiniciado 🔄");
+}
+</script>
+</body>
+</html>
