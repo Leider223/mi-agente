@@ -98,8 +98,8 @@ input[type=number]{width:80px;font-size:28px;font-weight:bold;text-align:center;
 const MODEL_URL = "https://teachablemachine.withgoogle.com/models/zzAdMNAF1/";
 const CLASE_ABAJO = "abajo";      // nombres de las clases de tu modelo
 const CLASE_ARRIBA = "arriba";
-const CONFIANZA_MINIMA = 0.80;
-const FRAMES_ESTABLES = 3;        // predicciones seguidas para confirmar una posición
+const CONFIANZA_MINIMA = 0.70;
+const FRAMES_ESTABLES = 2;        // predicciones seguidas para confirmar una posición
 const INTERVALO_MS = 80;          // ~12 predicciones/seg (cuida batería del teléfono)
 
 // ===== ESTADO =====
@@ -119,7 +119,7 @@ function setPill(on) {
 // ===== CÁMARA =====
 async function abrirCamara() {
   if (webcam) webcam.stop();
-  webcam = new tmImage.Webcam(400, 400, camara === "user"); // espejo solo en frontal
+  webcam = new tmImage.Webcam(400, 400, true);
   await webcam.setup({ facingMode: camara });
   await webcam.play();
   $("camara").replaceChildren(webcam.canvas);
